@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Virtual Serial Port (UMDF)" Language="1033" Version="1.0.0.0" Manufacturer="Open Source Developer" UpgradeCode="8B3A58D2-9C1C-4F9E-9C27-2D1C0AF5C9B1">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate />
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="BRIDGEHOST" Value="127.0.0.1" />
+    <Property Id="BRIDGEPORT" Value="10000" />
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="VirtualCom">
+        </Directory>
+      </Directory>
+      <Directory Id="System64Folder">
+        <Directory Id="UMDFDir" Name="UMDF" />
+      </Directory>
+    </Directory>
+    <Feature Id="MainFeature" Title="VirtualCom" Level="1">
+      <ComponentRef Id="cmpVirtualComBridge" />
+      <ComponentRef Id="cmpInf" />
+      <ComponentRef Id="cmpDriverDll" />
+    </Feature>
+    <Component Id="cmpVirtualComBridge" Guid="*" Directory="INSTALLDIR">
+      <File Id="filBridgeExe" Source="build\windows\VirtualComBridge.exe" KeyPath="yes" />
+      <ServiceInstall Id="svcInstall" Name="VirtualComBridge" DisplayName="Virtual COM Bridge" Description="Bridges a COM port to TCP" Start="auto" Type="ownProcess" ErrorControl="normal" Arguments="[BRIDGEHOST] [BRIDGEPORT]" />
+      <ServiceControl Id="svcControl" Name="VirtualComBridge" Start="install" Stop="both" Remove="uninstall" />
+    </Component>
+    <Component Id="cmpInf" Guid="*" Directory="INSTALLDIR">
+      <File Id="filInf" Source="src\windows\driver\virtual_com.inf" KeyPath="yes" />
+    </Component>
+    <Component Id="cmpDriverDll" Guid="*" Directory="UMDFDir">
+      <File Id="filDriverDll" Source="x64\Release\VirtualCom\VirtualCom.dll" KeyPath="yes" />
+    </Component>
+    <CustomAction Id="AddDriver" Directory="INSTALLDIR" ExeCommand='cmd.exe /c pnputil /add-driver "virtual_com.inf" /install' Execute="deferred" Impersonate="no" Return="check" />
+    <InstallExecuteSequence>
+      <Custom Action="AddDriver" After="InstallFiles">NOT REMOVE</Custom>
+    </InstallExecuteSequence>
+  </Product>
+</Wix>

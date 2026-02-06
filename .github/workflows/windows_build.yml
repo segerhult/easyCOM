@@ -1,0 +1,92 @@
+name: Windows Build & Sign
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup MSVC (cl.exe)
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    # Install Windows Driver Kit (WDK)
+    # This is required to build the driver.
+    - name: Install WDK
+      run: |
+        Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2196230" -OutFile "wdksetup.exe"
+        Start-Process -FilePath "wdksetup.exe" -ArgumentList "/quiet /norestart /features +" -Wait
+      shell: powershell
+
+    - name: Build Windows Applications
+      run: |
+        call build_windows.bat
+      shell: cmd
+
+    # Driver Build Step - Requires Project Files
+    # For now, we will attempt to build if the solution exists, or warn if it doesn't.
+    # We will generate a minimal solution/project if missing in a later step or assume user adds it.
+    # To make this pipeline work immediately, I will add a step to generate the project files if they don't exist,
+    # or I will commit them to the repo in this session.
+
+    - name: Build Driver (UMDF)
+      run: |
+        if exist "src\windows\driver\VirtualCom.sln" (
+          msbuild src\windows\driver\VirtualCom.sln /p:Configuration=Release /p:Platform=x64
+        ) else (
+          echo "WARNING: VirtualCom.sln not found. Skipping driver build."
+        )
+      shell: cmd
+
+    - name: Sign Artifacts
+      # This step requires a certificate. We use a self-signed one for demo/dev purposes if no secret is provided.
+      # In production, use secrets.WINDOWS_CERTIFICATE_BASE64 and secrets.WINDOWS_CERTIFICATE_PASSWORD
+      env:
+        CERT_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+        CERT_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      run: |
+        if defined CERT_BASE64 (
+          echo Decoding certificate...
+          echo %CERT_BASE64% > cert.b64
+          certutil -decode cert.b64 cert.pfx
+          
+          echo Signing Executables...
+          signtool sign /f cert.pfx /p %CERT_PASSWORD% /tr http://timestamp.digicert.com /td sha256 /fd sha256 build\windows\*.exe
+          
+          if exist "src\windows\driver\x64\Release\VirtualCom\VirtualCom.dll" (
+            echo Signing Driver...
+            signtool sign /f cert.pfx /p %CERT_PASSWORD% /tr http://timestamp.digicert.com /td sha256 /fd sha256 src\windows\driver\x64\Release\VirtualCom\VirtualCom.dll
+            signtool sign /f cert.pfx /p %CERT_PASSWORD% /tr http://timestamp.digicert.com /td sha256 /fd sha256 src\windows\driver\x64\Release\VirtualCom\VirtualCom.cat
+          )
+        ) else (
+          echo "No certificate secret provided. Skipping signing."
+        )
+      shell: cmd
+
+    - name: Setup Inno Setup
+      uses: thirdwavelabs/install-inno-setup@v1.0.0
+
+    - name: Build Installer
+      run: |
+        iscc "installer\VirtualComInstaller.iss"
+      shell: cmd
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Windows-Installer-and-Binaries
+        path: |
+          build/windows/*.exe
+          installer/Output/*.exe
+          src/windows/driver/x64/Release/VirtualCom/*

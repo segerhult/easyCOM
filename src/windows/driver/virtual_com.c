@@ -1,0 +1,269 @@
+/*
+ * Virtual Serial Port Driver (UMDF 2.0 Implementation)
+ * 
+ * PURPOSE:
+ * This driver creates a Virtual COM Port on Windows.
+ * Applications (like Arduino IDE) open this port (e.g., COM5) and send data.
+ * This driver receives the data and can forward it to a "helper service" (User Mode App)
+ * via a Named Pipe or Shared Memory, which then sends it over TCP.
+ *
+ * COMPILATION:
+ * This source code requires:
+ * 1. Microsoft Visual Studio (2019 or later)
+ * 2. Windows Driver Kit (WDK) 10/11
+ *
+ * It CANNOT be compiled with MinGW/GCC because it depends on WDF/UMDF libraries.
+ */
+
+#include <windows.h>
+#include <wdf.h>
+#include <initguid.h>
+#include <devpkey.h>
+#include <devguid.h>
+#include <ntddser.h>
+
+// Standard Serial IOCTLs
+#define IOCTL_SERIAL_SET_BAUD_RATE      CTL_CODE(FILE_DEVICE_SERIAL_PORT, 1, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_GET_BAUD_RATE      CTL_CODE(FILE_DEVICE_SERIAL_PORT, 20, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_SET_LINE_CONTROL   CTL_CODE(FILE_DEVICE_SERIAL_PORT, 3, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_GET_LINE_CONTROL   CTL_CODE(FILE_DEVICE_SERIAL_PORT, 21, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+// Serial Structures
+typedef struct _SERIAL_BAUD_RATE {
+    ULONG BaudRate;
+} SERIAL_BAUD_RATE, *PSERIAL_BAUD_RATE;
+
+typedef struct _SERIAL_LINE_CONTROL {
+    UCHAR StopBits;
+    UCHAR Parity;
+    UCHAR WordLength;
+} SERIAL_LINE_CONTROL, *PSERIAL_LINE_CONTROL;
+
+// Device Context
+typedef struct _DEVICE_CONTEXT {
+    SERIAL_BAUD_RATE CurrentBaudRate;
+    SERIAL_LINE_CONTROL CurrentLineControl;
+    HANDLE Pipe;
+} DEVICE_CONTEXT, *PDEVICE_CONTEXT;
+
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, DeviceGetContext)
+
+// Forward Declarations
+NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING RegistryPath);
+NTSTATUS EvtDriverDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit);
+VOID EvtIoRead(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request, _In_ size_t Length);
+VOID EvtIoWrite(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request, _In_ size_t Length);
+VOID EvtIoDeviceControl(_In_ WDFQUEUE Queue, _In_ WDFREQUEST Request, _In_ size_t OutputBufferLength, _In_ size_t InputBufferLength, _In_ ULONG IoControlCode);
+VOID EvtDeviceCleanup(_In_ WDFOBJECT Object);
+static void ConnectPipeIfNeeded(PDEVICE_CONTEXT ctx);
+
+static void ConnectPipeIfNeeded(PDEVICE_CONTEXT ctx) {
+    if (ctx->Pipe != NULL && ctx->Pipe != INVALID_HANDLE_VALUE) return;
+    HANDLE h = CreateFileW(L"\\\\.\\pipe\\VirtualComPipe", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+    if (h != INVALID_HANDLE_VALUE) ctx->Pipe = h;
+}
+
+// 1. Driver Entry
+NTSTATUS DriverEntry(
+    _In_ PDRIVER_OBJECT  DriverObject,
+    _In_ PUNICODE_STRING RegistryPath
+)
+{
+    WDF_DRIVER_CONFIG config;
+    WDF_DRIVER_CONFIG_INIT(&config, EvtDriverDeviceAdd);
+    return WdfDriverCreate(DriverObject, RegistryPath, WDF_NO_OBJECT_ATTRIBUTES, &config, WDF_NO_HANDLE);
+}
+
+// 2. Device Add - Setup COM Port Interface
+NTSTATUS EvtDriverDeviceAdd(
+    _In_    WDFDRIVER       Driver,
+    _Inout_ PWDFDEVICE_INIT DeviceInit
+)
+{
+    UNREFERENCED_PARAMETER(Driver);
+    NTSTATUS status;
+    WDFDEVICE device;
+    WDF_OBJECT_ATTRIBUTES deviceAttributes;
+
+    // Initialize Context
+    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&deviceAttributes, DEVICE_CONTEXT);
+    deviceAttributes.EvtCleanupCallback = EvtDeviceCleanup;
+
+    status = WdfDeviceCreate(&DeviceInit, &deviceAttributes, &device);
+    if (!NT_SUCCESS(status)) return status;
+
+    // Initialize default serial settings (9600 8N1)
+    PDEVICE_CONTEXT pDeviceContext = DeviceGetContext(device);
+    pDeviceContext->CurrentBaudRate.BaudRate = 9600;
+    pDeviceContext->CurrentLineControl.WordLength = 8;
+    pDeviceContext->CurrentLineControl.Parity = 0; // No Parity
+    pDeviceContext->CurrentLineControl.StopBits = 0; // 1 Stop Bit
+    pDeviceContext->Pipe = INVALID_HANDLE_VALUE;
+
+    // Create Device Interface (GUID_DEVINTERFACE_COMPORT)
+    status = WdfDeviceCreateDeviceInterface(device, &GUID_DEVINTERFACE_COMPORT, NULL);
+    if (!NT_SUCCESS(status)) return status;
+
+    // Create Queue
+    WDF_IO_QUEUE_CONFIG queueConfig;
+    WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE(&queueConfig, WdfIoQueueDispatchParallel);
+    queueConfig.EvtIoRead = EvtIoRead;
+    queueConfig.EvtIoWrite = EvtIoWrite;
+    queueConfig.EvtIoDeviceControl = EvtIoDeviceControl;
+
+    return WdfIoQueueCreate(device, &queueConfig, WDF_NO_OBJECT_ATTRIBUTES, WDF_NO_HANDLE);
+}
+
+// 3. Read (App wants data from Device)
+VOID EvtIoRead(
+    _In_ WDFQUEUE   Queue,
+    _In_ WDFREQUEST Request,
+    _In_ size_t     Length
+)
+{
+    WDFDEVICE device = WdfIoQueueGetDevice(Queue);
+    PDEVICE_CONTEXT ctx = DeviceGetContext(device);
+    ConnectPipeIfNeeded(ctx);
+
+    PVOID outBuf = NULL;
+    size_t outLen = 0;
+    NTSTATUS st = WdfRequestRetrieveOutputBuffer(Request, Length, &outBuf, &outLen);
+    if (!NT_SUCCESS(st)) {
+        WdfRequestCompleteWithInformation(Request, st, 0);
+        return;
+    }
+
+    DWORD available = 0;
+    BOOL ok = FALSE;
+    if (ctx->Pipe != INVALID_HANDLE_VALUE) {
+        ok = PeekNamedPipe(ctx->Pipe, NULL, 0, NULL, &available, NULL);
+    }
+    if (!ok || available == 0) {
+        WdfRequestCompleteWithInformation(Request, STATUS_SUCCESS, 0);
+        return;
+    }
+
+    DWORD toRead = (DWORD)((available < outLen) ? available : outLen);
+    DWORD read = 0;
+    BOOL r = ReadFile(ctx->Pipe, outBuf, toRead, &read, NULL);
+    if (!r) {
+        WdfRequestCompleteWithInformation(Request, STATUS_DEVICE_NOT_CONNECTED, 0);
+        return;
+    }
+    WdfRequestCompleteWithInformation(Request, STATUS_SUCCESS, read);
+}
+
+// 4. Write (App sends data to Device)
+VOID EvtIoWrite(
+    _In_ WDFQUEUE   Queue,
+    _In_ WDFREQUEST Request,
+    _In_ size_t     Length
+)
+{
+    WDFDEVICE device = WdfIoQueueGetDevice(Queue);
+    PDEVICE_CONTEXT ctx = DeviceGetContext(device);
+    ConnectPipeIfNeeded(ctx);
+
+    PVOID inBuf = NULL;
+    size_t inLen = 0;
+    NTSTATUS st = WdfRequestRetrieveInputBuffer(Request, Length, &inBuf, &inLen);
+    if (!NT_SUCCESS(st)) {
+        WdfRequestCompleteWithInformation(Request, st, 0);
+        return;
+    }
+
+    if (ctx->Pipe == INVALID_HANDLE_VALUE) {
+        WdfRequestCompleteWithInformation(Request, STATUS_DEVICE_NOT_CONNECTED, 0);
+        return;
+    }
+
+    DWORD written = 0;
+    BOOL w = WriteFile(ctx->Pipe, inBuf, (DWORD)inLen, &written, NULL);
+    if (!w) {
+        WdfRequestCompleteWithInformation(Request, STATUS_DEVICE_NOT_CONNECTED, 0);
+        return;
+    }
+    WdfRequestCompleteWithInformation(Request, STATUS_SUCCESS, written);
+}
+
+// 5. IOCTLs (Configure Port)
+VOID EvtIoDeviceControl(
+    _In_ WDFQUEUE   Queue,
+    _In_ WDFREQUEST Request,
+    _In_ size_t     OutputBufferLength,
+    _In_ size_t     InputBufferLength,
+    _In_ ULONG      IoControlCode
+)
+{
+    WDFDEVICE device = WdfIoQueueGetDevice(Queue);
+    PDEVICE_CONTEXT pContext = DeviceGetContext(device);
+    NTSTATUS status = STATUS_SUCCESS;
+    size_t bytesReturned = 0;
+
+    switch (IoControlCode) {
+        case IOCTL_SERIAL_SET_BAUD_RATE:
+        {
+            if (InputBufferLength < sizeof(SERIAL_BAUD_RATE)) {
+                status = STATUS_BUFFER_TOO_SMALL;
+                break;
+            }
+            PSERIAL_BAUD_RATE pBaud = NULL;
+            size_t len = 0;
+            status = WdfRequestRetrieveInputBuffer(Request, sizeof(SERIAL_BAUD_RATE), (PVOID*)&pBaud, &len);
+            if (!NT_SUCCESS(status)) break;
+            if (pBaud) {
+                pContext->CurrentBaudRate.BaudRate = pBaud->BaudRate;
+            }
+            break;
+        }
+
+        case IOCTL_SERIAL_GET_BAUD_RATE:
+        {
+            if (OutputBufferLength < sizeof(SERIAL_BAUD_RATE)) {
+                status = STATUS_BUFFER_TOO_SMALL;
+                break;
+            }
+            PSERIAL_BAUD_RATE pBaud = NULL;
+            size_t len = 0;
+            status = WdfRequestRetrieveOutputBuffer(Request, sizeof(SERIAL_BAUD_RATE), (PVOID*)&pBaud, &len);
+            if (!NT_SUCCESS(status)) break;
+            if (pBaud) {
+                pBaud->BaudRate = pContext->CurrentBaudRate.BaudRate;
+                bytesReturned = sizeof(SERIAL_BAUD_RATE);
+            }
+            break;
+        }
+
+        case IOCTL_SERIAL_SET_LINE_CONTROL:
+        {
+             if (InputBufferLength < sizeof(SERIAL_LINE_CONTROL)) {
+                status = STATUS_BUFFER_TOO_SMALL;
+                break;
+            }
+            PSERIAL_LINE_CONTROL pLC = NULL;
+            size_t len = 0;
+            status = WdfRequestRetrieveInputBuffer(Request, sizeof(SERIAL_LINE_CONTROL), (PVOID*)&pLC, &len);
+            if (!NT_SUCCESS(status)) break;
+            if (pLC) {
+                pContext->CurrentLineControl = *pLC;
+            }
+            break;
+        }
+
+        default:
+            // Pretend other IOCTLs succeed for compatibility
+            status = STATUS_SUCCESS;
+            break;
+    }
+
+    WdfRequestCompleteWithInformation(Request, status, bytesReturned);
+}
+
+VOID EvtDeviceCleanup(_In_ WDFOBJECT Object) {
+    WDFDEVICE device = (WDFDEVICE)Object;
+    PDEVICE_CONTEXT ctx = DeviceGetContext(device);
+    if (ctx->Pipe && ctx->Pipe != INVALID_HANDLE_VALUE) {
+        CloseHandle(ctx->Pipe);
+        ctx->Pipe = INVALID_HANDLE_VALUE;
+    }
+}

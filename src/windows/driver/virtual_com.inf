@@ -1,0 +1,48 @@
+;
+; VirtualCom.inf
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = Ports
+ClassGuid   = {4d36e978-e325-11ce-bfc1-08002be10318}
+Provider    = %ManufacturerName%
+CatalogFile = VirtualCom.cat
+DriverVer   = 02/03/2026,1.0.0.0
+PnpLockdown = 1
+
+[Manufacturer]
+%ManufacturerName% = Standard,NT$ARCH$
+
+[Standard.NT$ARCH$]
+%DeviceName% = VirtualCom_Install, Root\VirtualCom
+
+[VirtualCom_Install.NT]
+CopyFiles = Drivers_Dir
+
+[Drivers_Dir]
+VirtualCom.dll
+
+[VirtualCom_Install.NT.Services]
+AddService = WUDFRd,0x000001fa,WUDFRd_ServiceInstall
+
+[VirtualCom_Install.NT.Wdf]
+UmdfService              = VirtualCom, VirtualCom_Install
+UmdfServiceOrder         = VirtualCom
+UmdfKernelModeClientPolicy = AllowKernelModeClients
+
+[VirtualCom_Install]
+UmdfLibraryVersion       = $UMDFVERSION$
+ServiceBinary            = %12%\UMDF\VirtualCom.dll
+
+[WUDFRd_ServiceInstall]
+DisplayName   = %WudfRdDisplayName%
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %12%\WUDFRd.sys
+
+[Strings]
+ManufacturerName  = "Open Source Developer"
+DeviceName        = "Virtual Serial Port (UMDF)"
+WudfRdDisplayName = "Windows Driver Foundation - User-mode Driver Framework Reflector"
