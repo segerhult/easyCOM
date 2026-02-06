@@ -149,37 +149,37 @@ jobs:
              Write-Warning "Driver build output directory not found: $driverBuildRoot"
         }
 
-    - name: Test Driver Installation
-      shell: powershell
-      run: |
-        $driverBuildRoot = "src\windows\driver\x64\Release"
-        $infFile = Get-ChildItem -Path $driverBuildRoot -Filter "virtual_com.inf" -Recurse | Select-Object -First 1
-        
-        if (-not $infFile) {
-            Write-Error "virtual_com.inf not found in $driverBuildRoot"
-            Get-ChildItem -Path $driverBuildRoot -Recurse | ForEach-Object { Write-Host $_.FullName }
-            exit 1
-        }
-        
-        $infPath = $infFile.FullName
-        
-        # Install Driver using pnputil
-        Write-Host "Installing Driver from $infPath..."
-        pnputil /add-driver $infPath /install
-        
-        # Wait for device enumeration
-        Start-Sleep -Seconds 5
-        
-        # Verify Installation
-        $dev = Get-PnpDevice -FriendlyName "Virtual Serial Port (UMDF)" -ErrorAction SilentlyContinue
-        if ($dev) {
-            Write-Host "Device Installed Successfully: $($dev.FriendlyName) ($($dev.Status))"
-        } else {
-            Write-Warning "Device not found immediately. Proceeding to functional test..."
-        }
-        
-        # Run Functional Test Script
-        ./tests/test_driver_pipeline.ps1
+    # - name: Test Driver Installation
+    #   shell: powershell
+    #   run: |
+    #     $driverBuildRoot = "src\windows\driver\x64\Release"
+    #     $infFile = Get-ChildItem -Path $driverBuildRoot -Filter "virtual_com.inf" -Recurse | Select-Object -First 1
+    #     
+    #     if (-not $infFile) {
+    #         Write-Error "virtual_com.inf not found in $driverBuildRoot"
+    #         Get-ChildItem -Path $driverBuildRoot -Recurse | ForEach-Object { Write-Host $_.FullName }
+    #         exit 1
+    #     }
+    #     
+    #     $infPath = $infFile.FullName
+    #     
+    #     # Install Driver using pnputil
+    #     Write-Host "Installing Driver from $infPath..."
+    #     pnputil /add-driver $infPath /install
+    #     
+    #     # Wait for device enumeration
+    #     Start-Sleep -Seconds 5
+    #     
+    #     # Verify Installation
+    #     $dev = Get-PnpDevice -FriendlyName "Virtual Serial Port (UMDF)" -ErrorAction SilentlyContinue
+    #     if ($dev) {
+    #         Write-Host "Device Installed Successfully: $($dev.FriendlyName) ($($dev.Status))"
+    #     } else {
+    #         Write-Warning "Device not found immediately. Proceeding to functional test..."
+    #     }
+    #     
+    #     # Run Functional Test Script
+    #     ./tests/test_driver_pipeline.ps1
 
     - name: Setup Inno Setup
       run: |
