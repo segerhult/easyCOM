@@ -50,7 +50,7 @@ extern "C" {
 #endif
 
 __declspec(dllexport) ULONG WdfMinimumVersionRequired = (UMDF_VERSION_MAJOR * 1000) + UMDF_VERSION_MINOR;
-__declspec(dllexport) PWDFFUNCTIONS WdfFunctions = NULL;
+__declspec(dllexport) WDFFUNCTIONS WdfFunctions = NULL;
 
 #if defined(__cplusplus)
 }
