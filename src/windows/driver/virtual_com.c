@@ -50,8 +50,10 @@ extern "C" {
 #endif
 
 __declspec(dllexport) ULONG WdfMinimumVersionRequired = (UMDF_VERSION_MAJOR * 1000) + UMDF_VERSION_MINOR;
-// Fallback to void* if WDFFUNCTIONS is not defined
-__declspec(dllexport) void* WdfFunctions = NULL;
+
+// WdfFunctions is already declared in wdf.h, we just need to define it.
+// Use the correct type WDFFUNCTIONS (which is a pointer type).
+__declspec(dllexport) WDFFUNCTIONS WdfFunctions = NULL;
 
 #if defined(__cplusplus)
 }
