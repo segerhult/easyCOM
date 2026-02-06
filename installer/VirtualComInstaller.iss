@@ -9,7 +9,7 @@ ArchitecturesInstallIn64BitMode=x64
 Source: "..\build\windows\EasyCOM.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\windows\VirtualComBridge.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\src\windows\driver\virtual_com.inf"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\src\windows\driver\x64\Release\VirtualCom\VirtualCom.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\windows\driver\x64\Release\VirtualCom.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{commondesktop}\EasyCOM"; Filename: "{app}\EasyCOM.exe"
