@@ -15,7 +15,10 @@
  * It CANNOT be compiled with MinGW/GCC because it depends on WDF/UMDF libraries.
  */
 
+#define WIN32_NO_STATUS
 #include <windows.h>
+#undef WIN32_NO_STATUS
+#include <ntstatus.h>
 #include <wdf.h>
 #include <initguid.h>
 #include <devpkey.h>
