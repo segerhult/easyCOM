@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <winsock2.h>
 #include <windows.h>
 #include <stdio.h>
@@ -290,7 +291,7 @@ void LogMessage(const char* fmt, ...) {
     }
 
     // Send to UI thread
-    char* msgCopy = strdup(buffer);
+    char* msgCopy = _strdup(buffer);
     PostMessage(hClientWnd, WM_LOG_MESSAGE, 0, (LPARAM)msgCopy);
 }
 
