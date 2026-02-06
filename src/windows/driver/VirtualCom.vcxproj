@@ -70,10 +70,11 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <AdditionalIncludeDirectories>$(WDKContentRoot)Include\10.0.26100.0\km;$(WDKContentRoot)Include\10.0.26100.0\um;$(WDKContentRoot)Include\10.0.26100.0\shared;$(WDKContentRoot)Include\wdf\umdf\2.0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_WIN64;_AMD64_;_UNICODE;UNICODE;UMDF_USING_NTSTATUS;UMDF_VERSION_MAJOR=2;UMDF_VERSION_MINOR=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(WdfLibPath);$(WDKContentRoot)Lib\10.0.26100.0\um\x64;$(WDKContentRoot)Lib\wdf\umdf\x64\2.33;$(WDKContentRoot)Lib\wdf\umdf\x64\2.31;$(WDKContentRoot)Lib\wdf\umdf\x64\2.25;$(WDKContentRoot)Lib\wdf\umdf\x64\2.15;$(WDKContentRoot)Lib\wdf\umdf\x64\2.0;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>WdfDriverStubUm.lib;OneCoreUAP.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>WdfDriverStubUm.lib;ntdll.lib;OneCoreUAP.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/VERBOSE:LIB %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <Inf>
