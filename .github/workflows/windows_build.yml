@@ -29,6 +29,12 @@ jobs:
         Start-Process -FilePath "wdksetup.exe" -ArgumentList "/quiet /norestart /features +" -Wait
       shell: powershell
 
+    - name: Debug WDK Paths
+      run: |
+        dir "C:\Program Files (x86)\Windows Kits\10\Lib\wdf\umdf\x64"
+      shell: cmd
+      continue-on-error: true
+
     - name: Build Windows Applications
       run: |
         call build_windows.bat
@@ -50,29 +56,75 @@ jobs:
       shell: cmd
 
     - name: Sign Artifacts
-      # This step requires a certificate. We use a self-signed one for demo/dev purposes if no secret is provided.
-      # In production, use secrets.WINDOWS_CERTIFICATE_BASE64 and secrets.WINDOWS_CERTIFICATE_PASSWORD
+      shell: powershell
       env:
         CERT_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
         CERT_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
       run: |
-        if defined CERT_BASE64 (
-          echo Decoding certificate...
-          echo %CERT_BASE64% > cert.b64
-          certutil -decode cert.b64 cert.pfx
+        $certPath = "cert.pfx"
+        $certPassword = $env:CERT_PASSWORD
+        
+        if ($env:CERT_BASE64) {
+          Write-Host "Decoding certificate from secrets..."
+          [IO.File]::WriteAllBytes("cert.pfx", [Convert]::FromBase64String($env:CERT_BASE64))
+        } else {
+          Write-Host "No secret provided. Generating Self-Signed Certificate for Testing..."
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=VirtualComTest" -CertStoreLocation Cert:\LocalMachine\My
+          $password = ConvertTo-SecureString -String "password" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $password
+          $certPassword = "password"
           
-          echo Signing Executables...
-          signtool sign /f cert.pfx /p %CERT_PASSWORD% /tr http://timestamp.digicert.com /td sha256 /fd sha256 build\windows\*.exe
-          
-          if exist "src\windows\driver\x64\Release\VirtualCom\VirtualCom.dll" (
-            echo Signing Driver...
-            signtool sign /f cert.pfx /p %CERT_PASSWORD% /tr http://timestamp.digicert.com /td sha256 /fd sha256 src\windows\driver\x64\Release\VirtualCom\VirtualCom.dll
-            signtool sign /f cert.pfx /p %CERT_PASSWORD% /tr http://timestamp.digicert.com /td sha256 /fd sha256 src\windows\driver\x64\Release\VirtualCom\VirtualCom.cat
-          )
-        ) else (
-          echo "No certificate secret provided. Skipping signing."
-        )
-      shell: cmd
+          # Trust it for testing
+          Export-Certificate -Cert $cert -FilePath "driver.cer"
+          Import-Certificate -FilePath "driver.cer" -CertStoreLocation Cert:\LocalMachine\Root
+          Import-Certificate -FilePath "driver.cer" -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
+        }
+        
+        # Locate signtool
+        $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+        if (-not $signtool) {
+            Write-Error "Signtool not found."
+            exit 1
+        }
+        Write-Host "Using Signtool: $signtool"
+        
+        # Sign Executables
+        $exePath = "build\windows\EasyCOM.exe"
+        if (Test-Path $exePath) {
+             & $signtool sign /f $certPath /p $certPassword /fd sha256 /tr http://timestamp.digicert.com /td sha256 $exePath
+        }
+
+        # Sign Driver
+        $driverPath = "src\windows\driver\x64\Release\VirtualCom"
+        if (Test-Path "$driverPath\VirtualCom.dll") {
+             Write-Host "Signing Driver..."
+             & $signtool sign /f $certPath /p $certPassword /fd sha256 /tr http://timestamp.digicert.com /td sha256 "$driverPath\VirtualCom.dll"
+             & $signtool sign /f $certPath /p $certPassword /fd sha256 /tr http://timestamp.digicert.com /td sha256 "$driverPath\VirtualCom.cat"
+        }
+
+    - name: Test Driver Installation
+      shell: powershell
+      run: |
+        $driverPath = "src\windows\driver\x64\Release\VirtualCom"
+        $infPath = "$driverPath\virtual_com.inf"
+        
+        # Install Driver using pnputil
+        Write-Host "Installing Driver from $infPath..."
+        pnputil /add-driver $infPath /install
+        
+        # Wait for device enumeration
+        Start-Sleep -Seconds 5
+        
+        # Verify Installation
+        $dev = Get-PnpDevice -FriendlyName "Virtual Serial Port (UMDF)" -ErrorAction SilentlyContinue
+        if ($dev) {
+            Write-Host "Device Installed Successfully: $($dev.FriendlyName) ($($dev.Status))"
+        } else {
+            Write-Warning "Device not found immediately. Proceeding to functional test..."
+        }
+        
+        # Run Functional Test Script
+        ./tests/test_driver_pipeline.ps1
 
     - name: Setup Inno Setup
       run: |
