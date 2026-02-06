@@ -69,10 +69,10 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>$(WDKContentRoot)Include\10.0.26100.0\km;$(WDKContentRoot)Include\10.0.26100.0\um;$(WDKContentRoot)Include\10.0.26100.0\shared;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(WDKContentRoot)Include\10.0.26100.0\km;$(WDKContentRoot)Include\10.0.26100.0\um;$(WDKContentRoot)Include\10.0.26100.0\shared;$(WDKContentRoot)Include\wdf\umdf\2.0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(WDKContentRoot)Lib\10.0.26100.0\um\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(WDKContentRoot)Lib\10.0.26100.0\um\x64;$(WDKContentRoot)Lib\wdf\umdf\x64\2.0;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <Inf>
       <TimeStamp>4.5.10.10.10</TimeStamp>
