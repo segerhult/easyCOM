@@ -35,6 +35,10 @@
     <ConfigurationType>DynamicLibrary</ConfigurationType>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  
+  <!-- Explicitly Import WDK Properties if needed, although WindowsUserModeDriver10.0 should handle it -->
+  <!-- If WDK is installed in a standard location but not found, we might need to look for it. -->
+  
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="PropertySheets">
@@ -65,7 +69,11 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>$(WDKContentRoot)Include\10.0.26100.0\km;$(WDKContentRoot)Include\10.0.26100.0\um;$(WDKContentRoot)Include\10.0.26100.0\shared;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(WDKContentRoot)Lib\10.0.26100.0\um\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
     <Inf>
       <TimeStamp>4.5.10.10.10</TimeStamp>
     </Inf>
