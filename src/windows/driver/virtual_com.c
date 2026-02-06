@@ -51,89 +51,20 @@ extern "C" {
 
 __declspec(dllexport) ULONG WdfMinimumVersionRequired = (UMDF_VERSION_MAJOR * 1000) + UMDF_VERSION_MINOR;
 
-// WdfFunctions is declared in wdf.h.
-// Since C2372 is an ERROR, not a warning, #pragma warning disable doesn't work.
-// We MUST match the type declaration in wdf.h exactly.
-// The error says "different types of indirection".
+// Workaround for C2372 (Redefinition error) and LNK2001 (Unresolved symbol).
+// We cannot define 'WdfFunctions' directly because it conflicts with the header declaration
+// in a way that is hard to match exactly (typedef vs void* vs redefinition).
 //
-// In WDF headers (wdftypes.h), WDFFUNCTIONS is usually:
-// typedef WDFFUNC *PWDFFUNCTIONS;
-// typedef PWDFFUNCTIONS WDFFUNCTIONS;
-//
-// So it's a pointer to a pointer.
-//
-// Previous attempts:
-// 1. WDFFUNCTIONS (syntax error -> compiler didn't know the type)
-// 2. void* (redefinition error -> type mismatch)
-//
-// If the compiler doesn't know WDFFUNCTIONS, it means the typedef is missing or hidden.
-// BUT wdf.h declares 'extern WDFFUNCTIONS WdfFunctions;'.
-// This implies wdf.h knows the type.
-//
-// If we simply include wdf.h, we should have the type.
-// The syntax error suggests something is interfering with the type definition.
-//
-// Let's try to deduce the type by defining it with a generic name that matches the structure
-// but avoids the redefinition error by NOT defining WdfFunctions directly if we can avoid it.
-//
-// Wait, we MUST define it because the linker complained LNK2001.
-//
-// Let's try using the EXACT type chain that WDF likely uses, but ensure definitions are present.
-typedef void (*MY_WDFFUNC) (void);
-typedef MY_WDFFUNC *MY_PWDFFUNCTIONS;
-typedef MY_PWDFFUNCTIONS MY_WDFFUNCTIONS;
+// Instead, we define a separate variable 'MyWdfFunctions' and use the linker to
+// map 'WdfFunctions' to it. This satisfies the linker (WdfDriverStubUm.lib)
+// without angering the compiler.
+__declspec(dllexport) void* MyWdfFunctions = NULL;
 
-// The header has: extern WDFFUNCTIONS WdfFunctions;
-// We need to define: WDFFUNCTIONS WdfFunctions = NULL;
-//
-// If we can't use WDFFUNCTIONS, we can try to cast the definition? No, C doesn't work like that.
-//
-// Let's go back to the fact that 'WDFFUNCTIONS' caused a syntax error.
-// This is the root cause. Why is it a syntax error?
-// Maybe it's defined as a struct in this version?
-//
-// Let's try this:
-// Define it as a simple pointer to void, but make the name match what the linker wants,
-// while avoiding the C compiler seeing the conflict.
-// We can do this by using a linker alias, but that's MSVC specific pragma.
-//
-// #pragma comment(linker, "/alternatename:_WdfFunctions=MyWdfFunctions")
-//
-// But WdfFunctions is imported/exported.
-//
-// Let's try to FORCE the type to be what we want by defining the typedefs BEFORE including wdf.h?
-// No, wdf.h is already included.
-//
-// What if we assume WDFFUNCTIONS is just a pointer?
-//
-// Let's try:
-// PVOID WdfFunctions = NULL;
-// This failed with C2372.
-//
-// The header declares it. We cannot change the header.
-// We must match the header.
-// The header uses WDFFUNCTIONS.
-//
-// If I use WDFFUNCTIONS and get a syntax error, it implies the compiler doesn't see the typedef.
-//
-// Let's try to define the typedefs AGAIN, but EXACTLY as the MS headers do, 
-// ensuring we don't conflict if they ARE defined (using #ifndef).
-//
-// Actually, let's look at the error C2372 again.
-// "redefinition; different types of indirection"
-// This means the compiler SEES the previous declaration.
-// So the type IS known.
-//
-// So why did `WDFFUNCTIONS WdfFunctions = NULL;` fail with Syntax Error?
-// Maybe `NULL` was undefined? No, standard headers included.
-//
-// Maybe `WDFFUNCTIONS` is a macro?
-//
-// Let's try using `void**` which is "pointer to pointer".
-// WDFFUNCTIONS is `void (**)(void)`.
-//
-// Let's try:
-__declspec(dllexport) void (**WdfFunctions)(void) = NULL;
+#if defined(_M_AMD64) || defined(__amd64__)
+#pragma comment(linker, "/alternatename:WdfFunctions=MyWdfFunctions")
+#else
+#pragma comment(linker, "/alternatename:_WdfFunctions=_MyWdfFunctions")
+#endif
 
 #if defined(__cplusplus)
 }
