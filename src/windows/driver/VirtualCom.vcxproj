@@ -72,7 +72,7 @@
       <AdditionalIncludeDirectories>$(WDKContentRoot)Include\10.0.26100.0\km;$(WDKContentRoot)Include\10.0.26100.0\um;$(WDKContentRoot)Include\10.0.26100.0\shared;$(WDKContentRoot)Include\wdf\umdf\2.0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(WDKContentRoot)Lib\10.0.26100.0\um\x64;$(WDKContentRoot)Lib\wdf\umdf\x64\2.0;$(WDKContentRoot)Lib\wdf\umdf\x64\2.15;$(WDKContentRoot)Lib\wdf\umdf\x64\2.17;$(WDKContentRoot)Lib\wdf\umdf\x64\2.19;$(WDKContentRoot)Lib\wdf\umdf\x64\2.21;$(WDKContentRoot)Lib\wdf\umdf\x64\2.23;$(WDKContentRoot)Lib\wdf\umdf\x64\2.25;$(WDKContentRoot)Lib\wdf\umdf\x64\2.27;$(WDKContentRoot)Lib\wdf\umdf\x64\2.29;$(WDKContentRoot)Lib\wdf\umdf\x64\2.31;$(WDKContentRoot)Lib\wdf\umdf\x64\2.33;$(WDKContentRoot)Lib\wdf\umdf\x64\2.35;$(WDKContentRoot)Lib\wdf\umdf\x64\2.37;$(WDKContentRoot)Lib\wdf\umdf\x64\2.39;$(WDKContentRoot)Lib\wdf\umdf\x64\2.41;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(WdfLibPath);$(WDKContentRoot)Lib\10.0.26100.0\um\x64;$(WDKContentRoot)Lib\wdf\umdf\x64\2.0;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>WdfDriverEntry.lib;OneCoreUAP.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/VERBOSE:LIB %(AdditionalOptions)</AdditionalOptions>
     </Link>

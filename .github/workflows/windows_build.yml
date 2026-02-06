@@ -29,11 +29,16 @@ jobs:
         Start-Process -FilePath "wdksetup.exe" -ArgumentList "/quiet /norestart /features +" -Wait
       shell: powershell
 
-    - name: Debug WDK Paths
+    - name: Find WDK Library Path
       run: |
-        dir "C:\Program Files (x86)\Windows Kits\10\Lib\wdf\umdf\x64"
-      shell: cmd
-      continue-on-error: true
+        $libPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\Lib\wdf\umdf\x64" -Filter "WdfDriverEntry.lib" -Recurse | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty DirectoryName
+        if (!$libPath) {
+          Write-Error "Could not find WdfDriverEntry.lib"
+          exit 1
+        }
+        Write-Host "Found WDF Lib Path: $libPath"
+        echo "WDF_LIB_PATH=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+      shell: powershell
 
     - name: Build Windows Applications
       run: |
@@ -49,7 +54,7 @@ jobs:
     - name: Build Driver (UMDF)
       run: |
         if exist "src\windows\driver\VirtualCom.sln" (
-          msbuild src\windows\driver\VirtualCom.sln /p:Configuration=Release /p:Platform=x64
+          msbuild src\windows\driver\VirtualCom.sln /p:Configuration=Release /p:Platform=x64 /p:WdfLibPath="%WDF_LIB_PATH%"
         ) else (
           echo "WARNING: VirtualCom.sln not found. Skipping driver build."
         )
