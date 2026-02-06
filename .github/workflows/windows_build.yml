@@ -31,60 +31,13 @@ jobs:
 
     - name: Find WDK Library Path
       run: |
-        Write-Host "--- Debugging WDK Installation ---"
-        
-        # Check Lib root to see installed SDK versions
-        $libRoot = "C:\Program Files (x86)\Windows Kits\10\Lib"
-        if (Test-Path $libRoot) {
-            Write-Host "SDK Versions in $libRoot :"
-            Get-ChildItem -Path $libRoot -Directory | Select-Object Name
-            
-            # Check wdf folder
-            $wdfRoot = "$libRoot\wdf"
-            if (Test-Path $wdfRoot) {
-                Write-Host "WDF Root contents:"
-                Get-ChildItem -Path $wdfRoot -Directory | Select-Object Name
-                
-                # Check umdf folder
-                $umdfRoot = "$wdfRoot\umdf"
-                if (Test-Path $umdfRoot) {
-                    Write-Host "UMDF Architectures:"
-                    Get-ChildItem -Path $umdfRoot -Directory | Select-Object Name
-                    
-                    # Check x64 content specifically if it exists
-                    $x64 = "$umdfRoot\x64"
-                    if (Test-Path $x64) {
-                         Write-Host "UMDF x64 Versions:"
-                         Get-ChildItem -Path $x64 -Directory | Select-Object Name
-                         
-                         # Check for any .lib files in the latest version
-                         $latest = Get-ChildItem -Path $x64 -Directory | Sort-Object Name -Descending | Select-Object -First 1
-                         if ($latest) {
-                            Write-Host "Listing .lib files in $($latest.FullName):"
-                            Get-ChildItem -Path $latest.FullName -Filter "*.lib" | Select-Object Name
-                         }
-                    } else {
-                        Write-Warning "UMDF x64 folder MISSING at $x64"
-                    }
-                } else {
-                    Write-Warning "UMDF folder MISSING at $umdfRoot"
-                }
-            } else {
-                Write-Warning "wdf folder MISSING at $wdfRoot"
-            }
-        } else {
-            Write-Warning "Lib root MISSING at $libRoot"
-        }
-        
-        Write-Host "--- End Debug ---"
-
-        # Resume search logic
         $kitsRoots = @("C:\Program Files (x86)\Windows Kits", "C:\Program Files\Windows Kits")
         $foundFiles = @()
 
         foreach ($root in $kitsRoots) {
             if (Test-Path $root) {
-                $files = Get-ChildItem -Path $root -Filter "WdfDriverEntry.lib" -Recurse -ErrorAction SilentlyContinue
+                # Search for WdfDriverStubUm.lib (UMDF 2.x) instead of WdfDriverEntry.lib
+                $files = Get-ChildItem -Path $root -Filter "WdfDriverStubUm.lib" -Recurse -ErrorAction SilentlyContinue
                 if ($files) {
                     $foundFiles += $files
                 }
@@ -106,7 +59,7 @@ jobs:
                  exit 1
             }
         } else {
-            Write-Error "WdfDriverEntry.lib not found anywhere."
+            Write-Error "WdfDriverStubUm.lib not found anywhere."
             exit 1
         }
       shell: powershell
