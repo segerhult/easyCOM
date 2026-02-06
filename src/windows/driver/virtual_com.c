@@ -15,10 +15,19 @@
  * It CANNOT be compiled with MinGW/GCC because it depends on WDF/UMDF libraries.
  */
 
+// Force UMDF Version Definitions to ensure wdf.h generates globals
+#ifndef UMDF_VERSION_MAJOR
+#define UMDF_VERSION_MAJOR 2
+#endif
+#ifndef UMDF_VERSION_MINOR
+#define UMDF_VERSION_MINOR 0
+#endif
+
 #define WIN32_NO_STATUS
 #include <windows.h>
 #undef WIN32_NO_STATUS
 #include <ntstatus.h>
+
 #include <wdf.h>
 #include <initguid.h>
 #include <devpkey.h>
