@@ -31,13 +31,29 @@ jobs:
 
     - name: Find WDK Library Path
       run: |
-        $libPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\Lib\wdf\umdf\x64" -Filter "WdfDriverEntry.lib" -Recurse | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty DirectoryName
-        if (!$libPath) {
-          Write-Error "Could not find WdfDriverEntry.lib"
-          exit 1
+        Write-Host "Searching for WdfDriverEntry.lib in Windows Kits..."
+        $files = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "WdfDriverEntry.lib" -Recurse -ErrorAction SilentlyContinue
+        
+        if ($files) {
+            foreach ($f in $files) {
+                Write-Host "Found: $($f.FullName)"
+            }
+            # Pick the best one (UMDF, x64, latest version)
+            $best = $files | Where-Object { $_.FullName -like "*umdf*x64*" } | Sort-Object FullName -Descending | Select-Object -First 1
+            if ($best) {
+                $libPath = $best.DirectoryName
+                Write-Host "Selected: $libPath"
+                echo "WDF_LIB_PATH=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+            } else {
+                 Write-Error "Found copies but none matched *umdf*x64*"
+                 exit 1
+            }
+        } else {
+            Write-Host "Listing contents of Lib directory to debug..."
+            Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\Lib" -Recurse -Depth 3 | Select-Object FullName
+            Write-Error "Critical: WdfDriverEntry.lib not found anywhere."
+            exit 1
         }
-        Write-Host "Found WDF Lib Path: $libPath"
-        echo "WDF_LIB_PATH=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
       shell: powershell
 
     - name: Build Windows Applications
