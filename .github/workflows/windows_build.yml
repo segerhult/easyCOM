@@ -75,11 +75,12 @@ jobs:
       shell: cmd
 
     - name: Setup Inno Setup
-      uses: thirdwavelabs/install-inno-setup@v1.0.0
+      run: |
+        choco install -y innosetup
 
     - name: Build Installer
       run: |
-        iscc "installer\VirtualComInstaller.iss"
+        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\VirtualComInstaller.iss"
       shell: cmd
 
     - name: Upload Artifacts
