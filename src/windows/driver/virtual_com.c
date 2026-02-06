@@ -23,6 +23,7 @@
 #define UMDF_VERSION_MINOR 0
 #endif
 
+#define WIN32_LEAN_AND_MEAN
 #define WIN32_NO_STATUS
 #include <windows.h>
 #undef WIN32_NO_STATUS
@@ -32,7 +33,29 @@
 #include <initguid.h>
 #include <devpkey.h>
 #include <devguid.h>
+
+// Suppress macro redefinition warnings from ntddser.h
+#pragma warning(push)
+#pragma warning(disable: 4005)
 #include <ntddser.h>
+#pragma warning(pop)
+
+// -------------------------------------------------------------------------
+// MANUAL FIX FOR LINKER ERRORS (LNK2001)
+// The WDF headers should define these, but are failing to do so in this 
+// CI environment. We define them explicitly to satisfy WdfDriverStubUm.lib.
+// -------------------------------------------------------------------------
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+__declspec(dllexport) ULONG WdfMinimumVersionRequired = (UMDF_VERSION_MAJOR * 1000) + UMDF_VERSION_MINOR;
+__declspec(dllexport) PWDFFUNCTIONS WdfFunctions = NULL;
+
+#if defined(__cplusplus)
+}
+#endif
+// -------------------------------------------------------------------------
 
 // Serial Structures and IOCTLs are defined in ntddser.h
 
