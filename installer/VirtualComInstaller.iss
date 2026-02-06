@@ -21,22 +21,27 @@ Filename: "sc.exe"; Parameters: "create VirtualComBridge binPath= ""{app}\Virtua
 Filename: "sc.exe"; Parameters: "start VirtualComBridge"; Flags: runhidden
 
 [Code]
-function GetHost(Param: string): string;
-var host: string;
+var
+  Page: TInputQueryWizardPage;
+
+procedure InitializeWizard;
 begin
-  host := '127.0.0.1';
-  if InputQuery('TCP Host', 'Enter bridge TCP host:', host) then
-    Result := host
-  else
-    Result := '127.0.0.1';
+  Page := CreateInputQueryPage(wpWelcome,
+    'TCP Bridge Configuration', 'Configure the TCP connection details',
+    'Please enter the Host and Port for the TCP bridge.');
+  Page.Add('TCP Host:', False);
+  Page.Add('TCP Port:', False);
+  
+  Page.Values[0] := '127.0.0.1';
+  Page.Values[1] := '10000';
+end;
+
+function GetHost(Param: string): string;
+begin
+  Result := Page.Values[0];
 end;
 
 function GetPort(Param: string): string;
-var port: string;
 begin
-  port := '10000';
-  if InputQuery('TCP Port', 'Enter bridge TCP port:', port) then
-    Result := port
-  else
-    Result := '10000';
+  Result := Page.Values[1];
 end;
