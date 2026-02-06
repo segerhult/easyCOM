@@ -12,9 +12,9 @@ DriverVer   = 02/03/2026,1.0.0.0
 PnpLockdown = 1
 
 [Manufacturer]
-%ManufacturerName% = Standard,NT$ARCH$
+%ManufacturerName% = Standard,NTamd64
 
-[Standard.NT$ARCH$]
+[Standard.NTamd64]
 %DeviceName% = VirtualCom_Install, Root\VirtualCom
 
 [VirtualCom_Install.NT]
@@ -32,7 +32,7 @@ UmdfServiceOrder         = VirtualCom
 UmdfKernelModeClientPolicy = AllowKernelModeClients
 
 [VirtualCom_Install]
-UmdfLibraryVersion       = $UMDFVERSION$
+UmdfLibraryVersion       = 2.15.0
 ServiceBinary            = %12%\UMDF\VirtualCom.dll
 
 [WUDFRd_ServiceInstall]

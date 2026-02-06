@@ -124,18 +124,44 @@ jobs:
         }
 
         # Sign Driver
-        $driverPath = "src\windows\driver\x64\Release\VirtualCom"
-        if (Test-Path "$driverPath\VirtualCom.dll") {
-             Write-Host "Signing Driver..."
-             & $signtool sign /f $certPath /p $certPassword /fd sha256 /tr http://timestamp.digicert.com /td sha256 "$driverPath\VirtualCom.dll"
-             & $signtool sign /f $certPath /p $certPassword /fd sha256 /tr http://timestamp.digicert.com /td sha256 "$driverPath\VirtualCom.cat"
+        # Search for the driver DLL in the Release folder
+        $driverBuildRoot = "src\windows\driver\x64\Release"
+        if (Test-Path $driverBuildRoot) {
+            $dllFile = Get-ChildItem -Path $driverBuildRoot -Filter "VirtualCom.dll" -Recurse | Select-Object -First 1
+            
+            if ($dllFile) {
+                 $driverDir = $dllFile.DirectoryName
+                 Write-Host "Found Driver at: $driverDir"
+                 
+                 Write-Host "Signing Driver..."
+                 & $signtool sign /f $certPath /p $certPassword /fd sha256 /tr http://timestamp.digicert.com /td sha256 "$driverDir\VirtualCom.dll"
+                 
+                 if (Test-Path "$driverDir\VirtualCom.cat") {
+                    & $signtool sign /f $certPath /p $certPassword /fd sha256 /tr http://timestamp.digicert.com /td sha256 "$driverDir\VirtualCom.cat"
+                 } else {
+                    Write-Warning "Catalog file (VirtualCom.cat) not found. Skipping catalog signing."
+                 }
+            } else {
+                 Write-Warning "VirtualCom.dll not found in $driverBuildRoot"
+                 Get-ChildItem -Path $driverBuildRoot -Recurse | ForEach-Object { Write-Host $_.FullName }
+            }
+        } else {
+             Write-Warning "Driver build output directory not found: $driverBuildRoot"
         }
 
     - name: Test Driver Installation
       shell: powershell
       run: |
-        $driverPath = "src\windows\driver\x64\Release\VirtualCom"
-        $infPath = "$driverPath\virtual_com.inf"
+        $driverBuildRoot = "src\windows\driver\x64\Release"
+        $infFile = Get-ChildItem -Path $driverBuildRoot -Filter "virtual_com.inf" -Recurse | Select-Object -First 1
+        
+        if (-not $infFile) {
+            Write-Error "virtual_com.inf not found in $driverBuildRoot"
+            Get-ChildItem -Path $driverBuildRoot -Recurse | ForEach-Object { Write-Host $_.FullName }
+            exit 1
+        }
+        
+        $infPath = $infFile.FullName
         
         # Install Driver using pnputil
         Write-Host "Installing Driver from $infPath..."
