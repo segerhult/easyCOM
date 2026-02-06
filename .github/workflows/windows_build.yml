@@ -31,27 +31,43 @@ jobs:
 
     - name: Find WDK Library Path
       run: |
-        Write-Host "Searching for WdfDriverEntry.lib in Windows Kits..."
-        $files = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "WdfDriverEntry.lib" -Recurse -ErrorAction SilentlyContinue
-        
-        if ($files) {
-            foreach ($f in $files) {
-                Write-Host "Found: $($f.FullName)"
+        $kitsRoots = @("C:\Program Files (x86)\Windows Kits", "C:\Program Files\Windows Kits")
+        $foundFiles = @()
+
+        foreach ($root in $kitsRoots) {
+            if (Test-Path $root) {
+                Write-Host "Searching in $root..."
+                $files = Get-ChildItem -Path $root -Filter "WdfDriverEntry.lib" -Recurse -ErrorAction SilentlyContinue
+                if ($files) {
+                    $foundFiles += $files
+                }
             }
-            # Pick the best one (UMDF, x64, latest version)
-            $best = $files | Where-Object { $_.FullName -like "*umdf*x64*" } | Sort-Object FullName -Descending | Select-Object -First 1
+        }
+        
+        if ($foundFiles.Count -gt 0) {
+            $foundFiles | ForEach-Object { Write-Host "Found: $($_.FullName)" }
+            
+            # Filter for UMDF and x64
+            $best = $foundFiles | Where-Object { $_.FullName -like "*umdf*x64*" } | Sort-Object FullName -Descending | Select-Object -First 1
+            
             if ($best) {
                 $libPath = $best.DirectoryName
                 Write-Host "Selected: $libPath"
                 echo "WDF_LIB_PATH=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
             } else {
-                 Write-Error "Found copies but none matched *umdf*x64*"
+                 Write-Warning "Found copies but none matched *umdf*x64*. Dumping wdf directory structure for debugging:"
+                 if (Test-Path "C:\Program Files (x86)\Windows Kits\10\Lib\wdf") {
+                    Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\Lib\wdf" -Recurse -Depth 3 | Select-Object FullName
+                 } else {
+                    Write-Warning "Path C:\Program Files (x86)\Windows Kits\10\Lib\wdf does not exist."
+                 }
                  exit 1
             }
         } else {
-            Write-Host "Listing contents of Lib directory to debug..."
-            Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\Lib" -Recurse -Depth 3 | Select-Object FullName
-            Write-Error "Critical: WdfDriverEntry.lib not found anywhere."
+            Write-Warning "WdfDriverEntry.lib not found anywhere. Dumping Windows Kits structure:"
+            if (Test-Path "C:\Program Files (x86)\Windows Kits") {
+                Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Depth 3 | Select-Object FullName
+            }
             exit 1
         }
       shell: powershell
