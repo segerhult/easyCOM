@@ -73,6 +73,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(WDKContentRoot)Lib\10.0.26100.0\um\x64;$(WDKContentRoot)Lib\wdf\umdf\x64\2.0;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>WdfDriverEntry.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Inf>
       <TimeStamp>4.5.10.10.10</TimeStamp>
