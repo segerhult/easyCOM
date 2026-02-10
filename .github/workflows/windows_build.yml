@@ -3,6 +3,8 @@ name: Windows Build & Sign
 on:
   push:
     branches: [ "main" ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ "main" ]
 
@@ -190,11 +192,46 @@ jobs:
         "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\VirtualComInstaller.iss"
       shell: cmd
 
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
+    - name: Sign Installer
+      shell: powershell
+      env:
+        CERT_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+        CERT_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      run: |
+        $certPath = "cert.pfx"
+        $certPassword = $env:CERT_PASSWORD
+        
+        # Locate signtool (Reuse location logic if possible, or just search again)
+        $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+        
+        if (-not $signtool) {
+            Write-Error "Signtool not found."
+            exit 1
+        }
+        
+        $installerPath = "installer\Output\EasyCOM_Setup.exe" 
+        # Note: Inno Setup default output is typically "Output\setup.exe" or similar.
+        # We need to check what the output filename is in the ISS file.
+        # Assuming default "mysetup.exe" if OutputBaseFilename is not set, or "Output\EasyCOM_Setup.exe" if we set it.
+        # Let's find any .exe in installer\Output
+        
+        $installer = Get-ChildItem -Path "installer\Output" -Filter "*.exe" | Select-Object -First 1
+        if ($installer) {
+             Write-Host "Signing Installer: $($installer.FullName)"
+             & $signtool sign /f $certPath /p $certPassword /fd sha256 /tr http://timestamp.digicert.com /td sha256 $installer.FullName
+        } else {
+             Write-Warning "Installer executable not found in installer\Output"
+        }
+
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
       with:
-        name: Windows-Installer-and-Binaries
-        path: |
-          build/windows/*.exe
+        files: |
           installer/Output/*.exe
-          src/windows/driver/x64/Release/VirtualCom/*
+          build/windows/*.exe
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
