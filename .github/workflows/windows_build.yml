@@ -223,6 +223,15 @@ jobs:
              Write-Warning "Installer executable not found in installer\Output"
         }
 
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Windows-Installer-and-Binaries
+        path: |
+          build/windows/*.exe
+          installer/Output/*.exe
+          src/windows/driver/x64/Release/VirtualCom/*
+
     - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v1

@@ -5,7 +5,6 @@ DefaultDirName={pf}\EasyCOM
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64
 OutputBaseFilename=EasyCOM_Setup
-SignTool=signtool
 
 [Types]
 Name: "full"; Description: "Full Installation"
